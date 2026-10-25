@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Gavetas Modulares 3D</title>
+<meta name="description" content="Gerador paramétrico de mini gavetas modulares para impressão 3D: ajuste as medidas, veja em 3D e baixe o STL.">
+<style>
+:root{--bg:#f4effb;--cd:#fff;--tx:#2b2540;--mu:#7a7390;--ac:#8e6bd8;--bd:#e2d9f1}
+@media(prefers-color-scheme:dark){:root{--bg:#1d1a28;--cd:#282438;--tx:#efeaf9;--mu:#a59fbb;--ac:#a98cf0;--bd:#3b3550}}
+*{box-sizing:border-box}
+body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--tx);display:grid;grid-template-columns:1fr 350px;height:100vh;overflow:hidden}
+#v{position:relative;min-width:0;min-height:0}
+canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#hint{position:absolute;left:10px;bottom:8px;font-size:12px;color:var(--mu);pointer-events:none}
+#p{overflow:auto;padding:14px;background:var(--cd);border-left:1px solid var(--bd)}
+h1{font-size:18px;margin:0 0 10px}h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mu);margin:18px 0 4px}
+button,select{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:8px 12px;margin:0 4px 6px 0}
+button.on,button.pr{background:var(--ac);border-color:var(--ac);color:#fff}
+select{width:100%;margin:6px 0}
+.r{display:grid;grid-template-columns:1fr auto;gap:2px 8px;margin:8px 0}.r input{grid-column:1/3;width:100%;accent-color:var(--ac)}
+#co{display:flex;gap:14px;margin:10px 0}#co label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mu)}
+#co input{width:56px;height:34px;padding:0;border:1px solid var(--bd);border-radius:8px;background:none}
+#mt{margin:0 0 6px}.card{border:1px solid var(--bd);border-radius:12px;padding:12px;background:var(--bg);margin:6px 0}.card p{margin:0 0 8px;line-height:1.45}.card code{display:block;word-break:break-all;padding:8px;border-radius:8px;background:var(--cd);border:1px solid var(--bd);margin-bottom:8px;user-select:all}
+#st,.n{font-size:12px;color:var(--mu);line-height:1.5}
+@media(max-width:760px){body{grid-template-columns:1fr;grid-template-rows:44vh 1fr}#p{border-left:0;border-top:1px solid var(--bd)}}
+</style></head><body>
+<div id="v"><canvas id="cv"></canvas><div id="hint">Arraste: girar · Pinça/scroll: zoom</div></div>
+<div id="p">
+ <h1>Gavetas modulares</h1>
+ <div id="tb"></div>
+ <div id="mt"></div>
+ <div id="ms"></div>
+ <div id="co"></div>
+ <h2>Modelo do puxador</h2><div id="kn"></div>
+ <button id="rm">Remover selecionados</button>
+ <h2>Geral (todos os módulos)</h2>
+ <div id="gs"></div>
+ <label class="n"><input type="checkbox" id="fl" checked> Base e topo lisos (sem encaixe nas pontas)</label>
+ <h2>Download STL</h2>
+ <select id="sel">
+  <option value="mod">Módulos selecionados — mesa de impressão (4 peças cada)</option>
+  <option value="body">Somente corpo(s) selecionado(s)</option>
+  <option value="drawer">Somente caixa(s) da gaveta selecionada(s)</option>
+  <option value="front">Somente frente(s) selecionada(s)</option>
+  <option value="knob">Somente puxador(es) selecionado(s)</option>
+  <option value="knobs">Os 4 modelos de puxador (mesa)</option>
+  <option value="all">Todos os módulos — mesa de impressão</option>
+ </select>
+ <button id="dl" class="pr">Baixar STL</button>
+ <div id="st"></div>
+ <div id="thx" class="n" hidden>Download iniciado! Se a ferramenta ajudou no seu projeto, veja abaixo como colaborar. 💜</div>
+ <h2>Colabore com o projeto</h2>
+ <div id="pix" class="card"><p>Esta ferramenta é gratuita. Se ela foi útil para você, fique à vontade para colaborar com o projeto via Pix, com o valor que achar justo. Obrigado!</p><code id="pk"></code><button id="cp" class="pr">Copiar chave Pix</button></div>
+ <p class="n">Encaixe: cauda de andorinha só na metade traseira do módulo (não aparece na frente); deslize um módulo no outro pela traseira até o fim do trilho. O fim do canal é uma ponte curta (≈15 mm). Impressão sem suporte: corpo com a traseira na mesa; <b>caixa da gaveta de pé sobre o fundo (aberta em cima)</b>; frente deitada com a face externa na mesa; puxador com a face plana na mesa. Cole a frente na caixa e o puxador na frente. O módulo 1 é a base (fundo liso) e o último é o topo (sem trilho).</p>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const PIX="box3d.cwb@gmail.com"; // ← coloque aqui a sua chave Pix (CPF, e-mail, telefone ou chave aleatória)
+const T=THREE,PI=Math.PI,
+ DG=2.4,   // altura do trilho cauda de andorinha (mm)
+ BW=8,     // largura da base do trilho (mm)
+ FP=3.2,   // espessura da frente da gaveta (mm)
+ CH=.6,    // chanfro 45° na base (mm)
+ INS=1.2,  // recuo da frente da gaveta em relação ao corpo (mm)
+ RL=.5,    // trilho de encaixe: fração da profundidade, a partir da traseira (não aparece na frente)
+ SEG=12,M=48;
+const PAL=[['#f6e8a0','#a98ee0','#b5e2c3'],['#b5e2c3','#f6e8a0','#a98ee0'],['#a98ee0','#b5e2c3','#f6e8a0'],['#ff8a1f','#c8e61c','#ff4fa0'],['#ff4fa0','#ff8a1f','#e9ef2a']];
+const G={wall:1.6,tol:.3,rnd:.75,knob:26,open:0,flat:true};
+const mods=[{w:100,h:46,d:80},{w:100,h:46,d:80},{w:100,h:70,d:80}].map((m,i)=>({...m,k:i,c:[...PAL[i]]}));
+let cur=0;const $=id=>document.getElementById(id);
+const eq=(p,q)=>Math.abs(p[0]-q[0])+Math.abs(p[1]-q[1])+Math.abs(p[2]-q[2])<1e-6;
+
+/* ---------- construtor de malha fechada (manifold) ---------- */
+function Bd(){const t=[],a=(p,q,r)=>{if(!(eq(p,q)||eq(q,r)||eq(p,r)))t.push(p,q,r)};
+ return{t,a,
+ w(p,za,q,zb,f){const n=p.length;for(let i=0;i<n;i++){const j=(i+1)%n,A=[...p[i],za],B=[...p[j],za],C=[...q[j],zb],D=[...q[i],zb];if(f){a(A,C,B);a(A,D,C)}else{a(A,B,C);a(A,C,D)}}},
+ c(o,h,z,up){const V=p=>new T.Vector2(p[0],p[1]),all=o.concat(...h);
+  T.ShapeUtils.triangulateShape(o.map(V),h.map(x=>x.map(V))).forEach(([i,j,k])=>{
+   const p=all[i],q=all[j],r=all[k],ar=(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);
+   const P=[p[0],p[1],z],Q=[q[0],q[1],z],R=[r[0],r[1],z];(ar>0)==up?a(P,Q,R):a(P,R,Q)})}}}
+function arc(cx,cy,r,a0,a1){const p=[];for(let i=0;i<=SEG;i++){const a=a0+(a1-a0)*i/SEG;p.push([cx+r*Math.cos(a),cy+r*Math.sin(a)])}return p}
+function rr(w,h,r){r=Math.max(.4,Math.min(r,w/2-.2,h/2-.2));const x=w/2-r,y=h/2-r;return[...arc(x,-y,r,-PI/2,0),...arc(x,y,r,0,PI/2),...arc(-x,y,r,PI/2,PI),...arc(-x,-y,r,PI,1.5*PI)]}
+const rad=(W,H)=>Math.max(.4,Math.min(G.rnd*H/2,W/2-BW/2-DG-G.tol-2,H/2-.2));
+/* perfil do corpo: trilho (topo) + canal (base), ambos cauda de andorinha a 45° */
+function prof(W,H,r,t,tm,gm){const a=BW/2,b=a+DG,A=a+t,B=b+t,x=W/2-r,y=H/2-r,u=H/2;
+ return[...arc(x,-y,r,-PI/2,0),...arc(x,y,r,0,PI/2),...(tm=='f'?[[a,u],[b,u+DG],[-b,u+DG],[-a,u]]:tm=='b'?[[a,u],[-a,u]]:[]),...arc(-x,y,r,PI/2,PI),...arc(-x,-y,r,PI,1.5*PI),...(gm=='f'?[[-A,-u],[-B,-u+DG+t],[B,-u+DG+t],[A,-u]]:gm=='b'?[[-A,-u],[A,-u]]:[])]}
+function inset(p,d){const n=p.length,e=(u,v)=>{const dx=v[0]-u[0],dy=v[1]-u[1],l=Math.hypot(dx,dy)||1;return[dy/l,-dx/l]};
+ return p.map((q,i)=>{const n1=e(p[(i+n-1)%n],q),n2=e(q,p[(i+1)%n]);let nx=n1[0]+n2[0],ny=n1[1]+n2[1];const l=Math.hypot(nx,ny)||1;nx/=l;ny/=l;
+  const k=d/Math.max(.5,nx*n1[0]+ny*n1[1]);return[q[0]-nx*k,q[1]-ny*k]})}
+
+/* ---------- peças (referencial de impressão: Z=0 na mesa) ---------- */
+function gen(m,i){const W=m.w,H=m.h,D=m.d,wl=G.wall,t=G.tol,r=rad(W,H),Wc=W-2*wl,Hc=H-2*(wl+DG),rc=Math.max(r-wl,.4);
+ const tg=!G.flat||i<mods.length-1,gr=!G.flat||i>0,u=H/2,ra=BW/2,rb=ra+DG,Lg=RL*D,Lt=Lg-t;
+ let b=Bd();const R1=prof(W,H,r,t,tg?'f':'n',gr?'f':'n'),R2=prof(W,H,r,t,tg?'b':'n',gr?'f':'n'),R3=prof(W,H,r,t,tg?'b':'n',gr?'b':'n'),P0=inset(R1,CH),cav=rr(Wc,Hc,rc);
+ b.c(P0,[],0,false);b.w(P0,0,R1,CH);b.w(R1,CH,R1,Lt);
+ if(tg)b.c([[ra,u],[rb,u+DG],[-rb,u+DG],[-ra,u]],[],Lt,true);                       // fim do trilho (face voltada para +Z)
+ b.w(R2,Lt,R2,Lg);
+ if(gr)b.c([[-ra-t,-u],[-rb-t,-u+DG+t],[rb+t,-u+DG+t],[ra+t,-u]],[],Lg,false);     // fim do canal (face voltada para -Z)
+ b.w(R3,Lg,R3,D);b.c(R3,[cav],D,true);b.w(cav,wl,cav,D,true);b.c(cav,[],wl,true);
+ const body=b.t;
+ b=Bd();const pn=rr(W-2*INS,H-2*INS,r-INS),p0=inset(pn,CH);
+ /* frente: placa impressa deitada (face externa na mesa, Z=0) */
+ b.c(p0,[],0,false);b.w(p0,0,pn,CH);b.w(pn,CH,pn,FP);b.c(pn,[],FP,true);const front=b.t;
+ /* caixa da gaveta: ABERTA EM CIMA, impressa de pé sobre o fundo (Z=0).
+  Acompanha a cavidade do módulo: canto superior em arco concêntrico (folga t), canto inferior em chanfro de 45° (sem suporte) */
+ const rce=Math.max(.4,Math.min(rc,Wc/2-.2,Hc/2-.2)),xo=Wc/2-t,hb=Hc-2*t,r1=Math.max(rce-t,wl+.4),r2=r1-wl,L=D-wl-2*t,zA=hb-r1,zc=zA+.5*r2,K=12;
+ const arcT=(z,r)=>xo-r1+Math.sqrt(Math.max(r*r-(z-zA)**2,0)),
+  wo=z=>Math.min(xo-r1+z,z<=zA?xo:arcT(z,r1)),
+  wi=z=>Math.min(xo-r1+z-1.4142*wl,z<=zA?xo-wl:arcT(z,r2));
+ const az=[];for(let k=1;k<=K;k++)az.push(zA+(zc-zA)*k/K);az[K-1]=zc;
+ const zo=[CH,r1,zA,...az],zi=[...new Set([wl,r1+.4142*wl,zA,...az])].filter(z=>z>=wl&&z<=zc).sort((p,q)=>p-q);
+ b=Bd();const ro=zo.map(z=>rr(2*wo(z),L,4)),ri=zi.map(z=>rr(2*wi(z),L-2*wl,Math.max(.4,4-wl))),r0=inset(ro[0],CH);
+ b.c(r0,[],0,false);b.w(r0,0,ro[0],CH);for(let k=0;k<zo.length-1;k++)b.w(ro[k],zo[k],ro[k+1],zo[k+1]);
+ b.c(ro[ro.length-1],[ri[ri.length-1]],zc,true);
+ for(let k=ri.length-1;k>0;k--)b.w(ri[k-1],zi[k-1],ri[k],zi[k],true);b.c(ri[0],[],wl,true);
+ return{body,front,drawer:b.t,a:xo,bh:hb/2,L,knob:knob(m.k)}}
+const KN=['Bola','Cogumelo','Cilindro','Alça'];
+/* 4 modelos de puxador — face de fixação em Z=0 (na mesa), sem suporte */
+function knob(s){const O=G.knob,R=O/2,b=Bd();
+ if(s==3){const L=2.2*O,th=.5*O,h=.55*O,pn=rr(L,th,th/2),p0=inset(pn,CH),tp=inset(pn,3);
+  b.c(p0,[],0,false);b.w(p0,0,pn,CH);b.w(pn,CH,pn,h-3);b.w(pn,h-3,tp,h);b.c(tp,[],h,true);return{t:b.t,w:L}}
+ let pr,w=O;
+ if(s==0){const d=.72*R,rf=Math.sqrt(R*R-d*d),f=Math.asin(d/R);pr=[[0,0],[rf-CH,0],[rf,CH]];
+  for(let i=1;i<18;i++){const p=-f+(PI/2+f)*i/18;pr.push([R*Math.cos(p),d+R*Math.sin(p)])}pr.push([0,d+R])}
+ else if(s==1){const hd=.45*R;pr=[[0,0],[R-CH,0],[R,CH],[R,3]];
+  for(let i=1;i<12;i++){const a=PI/2*i/12;pr.push([R*Math.cos(a),3+hd*Math.sin(a)])}pr.push([0,3+hd])}
+ else{const c=.7*R,h=.7*O;w=2*c;pr=[[0,0],[c-CH,0],[c,CH],[c,h-2],[c-2,h],[0,h]]}
+ const u=2*PI/M,P=(q,a)=>[q[0]*Math.cos(a),q[0]*Math.sin(a),q[1]];
+ for(let i=0;i<pr.length-1;i++)for(let j=0;j<M;j++){const x=j*u,y=x+u;b.a(P(pr[i],x),P(pr[i],y),P(pr[i+1],y));b.a(P(pr[i],x),P(pr[i+1],y),P(pr[i+1],x))}
+ return{t:b.t,w}}
+
+/* ---------- cena 3D ---------- */
+function geo(t){const n=t.length/3,pos=new Float32Array(n*9),nor=new Float32Array(n*9),fn=[],mp=new Map(),K=v=>Math.round(v[0]*50)+','+Math.round(v[1]*50)+','+Math.round(v[2]*50);
+ for(let i=0;i<n;i++){const[a,b,c]=[t[3*i],t[3*i+1],t[3*i+2]];
+  fn.push(new T.Vector3(b[0]-a[0],b[1]-a[1],b[2]-a[2]).cross(new T.Vector3(c[0]-a[0],c[1]-a[1],c[2]-a[2])).normalize());
+  for(let k=0;k<3;k++){const q=K(t[3*i+k]);if(!mp.has(q))mp.set(q,[]);mp.get(q).push(i);pos.set(t[3*i+k],9*i+3*k)}}
+ for(let i=0;i<n;i++)for(let k=0;k<3;k++){const s=new T.Vector3();for(const f of mp.get(K(t[3*i+k])))if(fn[f].dot(fn[i])>.8)s.add(fn[f]);s.normalize();nor.set([s.x,s.y,s.z],9*i+3*k)}
+ const g=new T.BufferGeometry();g.setAttribute('position',new T.BufferAttribute(pos,3));g.setAttribute('normal',new T.BufferAttribute(nor,3));return g}
+const cv=$('cv'),rd=new T.WebGLRenderer({canvas:cv,antialias:true,alpha:true}),sc=new T.Scene(),cam=new T.PerspectiveCamera(40,1,1,3000),grp=new T.Group();
+const dlight=new T.DirectionalLight(0xffffff,.9);dlight.position.set(150,300,250);
+sc.add(grp,new T.HemisphereLight(0xffffff,0x8a85a8,.85),dlight);
+function rs(){const e=cv.parentElement,w=e.clientWidth,h=e.clientHeight;if(!w||!h)return;rd.setPixelRatio(Math.min(devicePixelRatio,2));rd.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()}
+new ResizeObserver(rs).observe(cv.parentElement);
+let th=.6,ph=1.25,dist=340;const ptrs=new Map();let pd=0;
+cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY])};
+cv.onpointermove=e=>{const o=ptrs.get(e.pointerId);if(!o)return;
+ if(ptrs.size==1){th-=(e.clientX-o[0])*.01;ph=Math.min(3,Math.max(.15,ph-(e.clientY-o[1])*.01))}
+ ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+ if(ptrs.size==2){const[a,b]=[...ptrs.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1]);if(pd)dist=Math.min(1400,Math.max(80,dist*pd/d));pd=d}};
+cv.onpointerup=cv.onpointercancel=e=>{ptrs.delete(e.pointerId);pd=0};
+cv.onwheel=e=>{e.preventDefault();dist=Math.min(1400,Math.max(80,dist*(1+Math.sign(e.deltaY)*.08)))};
+(function f(){cam.position.set(dist*Math.sin(ph)*Math.sin(th),dist*Math.cos(ph),dist*Math.sin(ph)*Math.cos(th));cam.lookAt(0,0,0);rd.render(sc,cam);requestAnimationFrame(f)})();
+
+function rebuild(){
+ grp.children.slice().forEach(o=>{o.geometry.dispose();grp.remove(o)});
+ const tot=mods.reduce((s,m)=>s+m.h,0);let y=-tot/2,n=0;
+ let hl=false;const add=(t,c,py,pz,ry,rx)=>{const o=new T.Mesh(geo(t),new T.MeshStandardMaterial({color:c,roughness:.55,emissive:hl?0x8f6fe0:0,emissiveIntensity:.16}));o.position.set(0,py,pz);o.rotation.y=ry;o.rotation.x=rx||0;grp.add(o);n+=t.length/3};
+ mods.forEach((m,i)=>{hl=mods.length>1&&SL.includes(i);const g=m.g=gen(m,i);y+=m.h/2;const z=m.d/2+FP+G.open/100*m.d*.7;
+  const op=G.open/100*m.d*.7;add(g.body,m.c[0],y,-m.d/2,0);add(g.front,m.c[1],y,z,PI);add(g.drawer,m.c[1],y-g.bh,m.d/2+op-g.L/2,0,-PI/2);add(g.knob.t,m.c[2],y,z,0);y+=m.h/2});
+ $('st').textContent=mods.length+' módulo(s) · '+n.toLocaleString('pt-BR')+' triângulos'}
+
+/* ---------- painel ---------- */
+function mk(el,list,o,ap){el.innerHTML='';list.forEach(([k,l,mn,mx,st])=>{const r=document.createElement('label');r.className='r';
+ r.innerHTML=`<span>${l}</span><output></output><input type="range" min="${mn}" max="${mx}" step="${st}">`;
+ const i=r.querySelector('input'),u=r.querySelector('output');i.value=o[k];u.textContent=o[k];
+ i.oninput=()=>{const v=+i.value;ap?ap(k,v):o[k]=v;u.textContent=i.value;rebuild()};el.append(r)})}
+let SL=[0],mu=false; // SL = módulos selecionados; mu = modo "selecionar vários"
+function panel(){const m=mods[cur],tb=$('tb'),mt=$('mt'),ed=f=>SL.forEach(j=>f(mods[j]));tb.innerHTML='';mt.innerHTML='';
+ const bt=(el,t,f,on)=>{const b=document.createElement('button');b.textContent=t;if(on)b.className='on';b.onclick=f;el.append(b)};
+ mods.forEach((_,i)=>bt(tb,'Módulo '+(i+1),()=>{
+  if(mu){if(SL.includes(i)){if(SL.length>1){SL=SL.filter(j=>j!=i);if(!SL.includes(cur))cur=SL[SL.length-1]}}else{SL.push(i);cur=i}}else{SL=[i];cur=i}
+  panel();rebuild()},SL.includes(i)));
+ if(mods.length<8)bt(tb,'+ Novo',()=>{const q=mods[cur];mods.push({w:q.w,h:q.h,d:q.d,k:mods.length%4,c:[...PAL[mods.length%PAL.length]]});cur=mods.length-1;SL=[cur];panel();rebuild()});
+ bt(mt,'Selecionar vários',()=>{mu=!mu;if(!mu)SL=[cur];panel();rebuild()},mu);
+ bt(mt,'Todos',()=>{mu=true;SL=mods.map((_,i)=>i);panel();rebuild()});
+ const tx=document.createElement('span');tx.className='n';tx.textContent=' Editando: '+SL.map(i=>i+1).sort((a,b)=>a-b).join(', ');mt.append(tx);
+ mk($('ms'),[['w','Largura (mm)',50,170,1],['h','Altura (mm)',40,90,1],['d','Profundidade (mm)',40,220,1]],m,(k,v)=>ed(q=>q[k]=v));
+ $('co').innerHTML=['Corpo','Gaveta','Puxador'].map((n,k)=>`<label>${n}<input type="color" value="${m.c[k]}" data-k="${k}"></label>`).join('');
+ $('co').querySelectorAll('input').forEach(i=>i.oninput=()=>{ed(q=>q.c[+i.dataset.k]=i.value);rebuild()});
+ const kn=$('kn');kn.innerHTML='';KN.forEach((n,i)=>bt(kn,n,()=>{ed(q=>q.k=i);panel();rebuild()},m.k==i))}
+$('rm').onclick=()=>{if(SL.length>=mods.length)return;const f=Math.min(...SL),keep=mods.filter((_,i)=>!SL.includes(i));mods.splice(0,mods.length,...keep);cur=Math.min(f,mods.length-1);SL=[cur];panel();rebuild()};
+mk($('gs'),[['wall','Parede (mm)',1.2,2.4,.4],['tol','Folga / tolerância (mm)',.2,.5,.05],['rnd','Arredondamento',0,1,.05],['knob','Puxador Ø (mm)',16,40,1],['open','Gaveta aberta (%) — só visual',0,100,1]],G);
+
+/* ---------- exportação STL binário ---------- */
+const mv=(t,dx,dy)=>t.map(v=>[v[0]+dx,v[1]+dy,v[2]]);
+const RH=i=>Math.max(mods[i].h+2*DG,mods[i].g.L);
+function lay(i,y){const m=mods[i],g=m.g,fw=(m.w-2*INS)/2,x1=m.w/2+10+g.a,x2=x1+g.a+10+fw,x3=x2+fw+10+g.knob.w/2;return[].concat(mv(g.body,0,y),mv(g.drawer,x1,y),mv(g.front,x2,y),mv(g.knob.t,x3,y))}
+function stl(t){const n=t.length/3,b=new DataView(new ArrayBuffer(84+50*n));b.setUint32(80,n,true);let o=84;
+ for(let i=0;i<n;i++){const a=t[3*i],c=t[3*i+1],d=t[3*i+2],u=[c[0]-a[0],c[1]-a[1],c[2]-a[2]],v=[d[0]-a[0],d[1]-a[1],d[2]-a[2]];
+  const x=u[1]*v[2]-u[2]*v[1],y=u[2]*v[0]-u[0]*v[2],z=u[0]*v[1]-u[1]*v[0],l=Math.hypot(x,y,z)||1;
+  [x/l,y/l,z/l,...a,...c,...d].forEach((q,k)=>b.setFloat32(o+4*k,q,true));o+=50}
+ return new Blob([b],{type:'model/stl'})}
+$('dl').onclick=()=>{const k=$('sel').value,ix=k=='all'?mods.map((_,i)=>i):[...SL].sort((a,b)=>a-b);let t=[],n,y=0;
+ if(k=='knobs'){let x=0;[0,1,2,3].forEach(i=>{const q=knob(i);t=t.concat(mv(q.t,x+q.w/2,0));x+=q.w+10});n='puxadores_4_modelos'}
+ else{ix.forEach((i,r)=>{const g=mods[i].g;if(r)y+=(RH(ix[r-1])+RH(i))/2+10;
+   t=t.concat(k=='body'?mv(g.body,0,y):k=='drawer'?mv(g.drawer,0,y):k=='front'?mv(g.front,0,y):k=='knob'?mv(g.knob.t,0,y):lay(i,y))});
+  const q=mods[ix[0]];n=(k=='all'?'gavetas_todos_os_modulos':ix.length>1?'gavetas_'+ix.map(i=>i+1).join('-'):`gaveta${ix[0]+1}_${q.w}x${q.h}x${q.d}`)+(k=='mod'||k=='all'?'':'_'+k)}
+ const a=document.createElement('a');a.href=URL.createObjectURL(stl(t));a.download=n+'.stl';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),9000);
+ if(!PIX.startsWith('COLE')){$('thx').hidden=false;$('pix').scrollIntoView({behavior:'smooth',block:'nearest'})}};
+
+if(PIX.startsWith('COLE')){$('pix').style.display='none';document.querySelectorAll('h2').forEach(h=>{if(h.textContent.startsWith('Colabore'))h.style.display='none'})}else $('pk').textContent=PIX;
+$('cp').onclick=async()=>{try{await navigator.clipboard.writeText(PIX);$('cp').textContent='Chave copiada! ✓'}catch(e){const r=document.createRange();r.selectNodeContents($('pk'));const g=getSelection();g.removeAllRanges();g.addRange(r);$('cp').textContent='Chave selecionada: copie manualmente'}};
+$('fl').onchange=()=>{G.flat=$('fl').checked;rebuild()};
+panel();rebuild();rs();
+</script></body></html>
